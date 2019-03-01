@@ -1,15 +1,27 @@
 {
-  "private": true,
   "name": "tla-ui",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Awesome TLA+ IDE",
+  "author": "Max Taldykin <jorpic@gmail.com>",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jorpic/tla-ui/issues"
+  },
+  "homepage": "https://github.com/jorpic/tla-ui#readme",
+  "main": "index.js",
   "scripts": {
-    "start": "if-env NODE_ENV=production && npm run -s serve || npm run -s dev",
-    "build": "preact build",
-    "serve": "preact build && preact serve",
-    "dev": "preact watch",
+    "build": "webpack --config webpack.config.js",
+    "dev": "webpack --mode development",
+    "start": "webpack-dev-server",
     "lint": "eslint src"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jorpic/tla-ui.git"
+  },
+  "keywords": [
+    "tla+"
+  ],
   "eslintConfig": {
     "extends": "eslint-config-synacor"
   },
@@ -17,14 +29,18 @@
     "build/*"
   ],
   "devDependencies": {
+    "copy-webpack-plugin": "^5.0.0",
+    "css-loader": "^2.1.0",
     "eslint": "^5.14.1",
     "eslint-config-synacor": "^3.0.3",
-    "if-env": "^1.0.0",
-    "preact-cli": "^2.0.0"
+    "mini-css-extract-plugin": "^0.5.0",
+    "style-loader": "^0.23.1",
+    "webpack": "^4.29.0",
+    "webpack-cli": "^3.2.3",
+    "webpack-dev-server": "^3.2.1"
   },
   "dependencies": {
     "codemirror": "^5.44.0",
-    "preact": "^8.4.2",
-    "preact-compat": "^3.17.0"
+    "tla-parser": "^0.1.0"
   }
 }
