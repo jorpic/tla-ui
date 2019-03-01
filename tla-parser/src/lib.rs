@@ -19,6 +19,8 @@ pub fn parse(tla: &str) -> Option<String> {
     let (first_char, _remainder) = car_cdr(tla);
     if first_char == "#" {
         Some("comment".into())
+    } else if first_char == "$" {
+        Some("keyword".into())
     } else {
         None
     }

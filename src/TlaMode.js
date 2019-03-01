@@ -1,13 +1,13 @@
 import * as CodeMirror from 'codemirror';
+import * as Tla from 'tla-parser';
 
 export function registerMode() {
   CodeMirror.defineMode('tla', function() {
     return {
       token: function(stream) {
-        const TOKEN_NAMES = {'#': 'comment'};
-        const token = TOKEN_NAMES[stream.peek()];
+        const token = stream.peek();
         stream.skipToEnd();
-        return token;
+        return Tla.parse(token);
       }
     };
   })
