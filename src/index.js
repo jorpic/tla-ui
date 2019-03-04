@@ -3,14 +3,19 @@ import 'codemirror/lib/codemirror.css';
 import * as CodeMirror from 'codemirror';
 import * as Tla from './TlaMode';
 
-Tla.registerMode();
-const text = "---- test ----\n====";
+const text = "---- MODULE xxx ----\nEXTENDS Integers, TLC, Sequences\n====";
+
 const options = {
   lineNumbers: true,
   mode: "tla",
-  autoFocus: true,
-  value: text
+  autofocus: true,
 };
 
+const tlaMode = new Tla.Mode();
 const textarea = document.getElementById("codemirror");
 const codeMirror = CodeMirror.fromTextArea(textarea, options);
+codeMirror.on("change", function(doc, change) {
+  const code = doc.getValue();
+  tlaMode.updateParseTree(code);
+});
+codeMirror.setValue(text);

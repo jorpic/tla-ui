@@ -1,0 +1,31 @@
+WHITESPACE = _{" " | "\t"}
+
+
+
+name = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+names = { name ~ ("," ~ name)* }
+
+mod_prefix = @{ "-"{4,} }
+mod_postfix = @{ "-"{4,} }
+
+module_header = { mod_prefix ~ kw_module ~ name ~ mod_postfix }
+
+module_footer = { "="{4,} }
+
+tla_module = {
+  module_header ~ NEWLINE+
+    ~ (kw_extends ~ names ~ NEWLINE+){0,1}
+    ~ module_footer
+}
+
+
+// Keywords
+// Pest generates tokens for rules, but does not generate tokens
+// for exact strings in a rule. To highlight keywords we want to see them in
+// resulting token stream. That is why we add a bit of boilerplate and
+// describe keywords as rules here.
+
+kw_module = @{ "MODULE" }
+kw_extends = @{ "EXTENDS" }
+kw_variable = @{ "VARIABLE" | "VARIABLES" }
+kw_constant = @{ "CONSTANT" | "CONSTANTS" }
