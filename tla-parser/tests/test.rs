@@ -7,7 +7,7 @@ fn pass() {
     EXTENDS Integers, TLC, Sequences
     ====";
 
-    let res = TlaParser::parse(Rule::tla_module, text)
+    let res = TlaParser::parse(Rule::module, text)
         .unwrap_or_else(|err| panic!("{}", err));
     for pair in res.tokens() {
         match pair {

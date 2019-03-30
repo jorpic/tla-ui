@@ -21,8 +21,9 @@ pub struct ParseTree;
 #[wasm_bindgen]
 impl ParseTree {
     fn from_tokens<'a, I>(tokens: I) -> Self
-        where I : Iterator<Item=Token<'a, Rule>>
+        where I : IntoIterator<Item=Token<'a, Rule>>
     {
+        let tokens_iter = tokens.into_iter();
         ParseTree{}
     }
 
@@ -38,8 +39,8 @@ impl ParseTree {
 
 #[wasm_bindgen]
 pub fn parse(code: &str) -> Result<ParseTree, JsValue> {
-    let res = TlaParser::parse(Rule::tla_module, code)
+    let res = TlaParser::parse(Rule::module, code)
         .map_err(|err| JsValue::from_str(&format!("{:?}", err)))?;
 
-    Ok(ParseTree::from_tokens(res.tokens().into_iter()))
+    Ok(ParseTree::from_tokens(res.tokens()))
 }

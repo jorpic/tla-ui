@@ -1,9 +1,14 @@
-WHITESPACE = _{" " | "\t"}
+WHITESPACE = _{" " | "\t" | NEWLINE}
+COMMENT = _{ "\\*" ~ (!NEWLINE ~ ANY)* }
 
 
+wildcard = { "_" }
 
 name = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 names = { name ~ ("," ~ name)* }
+
+identifier = { !reserved_word ~ name }
+identifiers = { identifier ~ ("," ~ identifier)* }
 
 mod_prefix = @{ "-"{4,} }
 mod_postfix = @{ "-"{4,} }
@@ -12,20 +17,89 @@ module_header = { mod_prefix ~ kw_module ~ name ~ mod_postfix }
 
 module_footer = { "="{4,} }
 
-tla_module = {
-  module_header ~ NEWLINE+
-    ~ (kw_extends ~ names ~ NEWLINE+){0,1}
+module = {
+  module_header
+    ~ (kw_extends ~ names)?
+    ~ module_unit*
     ~ module_footer
 }
+
+module_unit = {
+  variable_declaration
+  | constant_declaration
+  // FIXME: nested modules are allowed
+}
+
+variable_declaration = { kw_variable ~ identifiers }
+constant_declaration = { kw_constant ~ operator_declarations }
+operator_declarations = {
+  operator_declaration ~ ("," ~ operator_declaration)*
+}
+operator_declaration = {
+  identifier ~ ("(" ~ wildcard ~ ("," ~ wildcard)* ~ ")")?
+  | prefix_operator ~ "_"
+  | "_" ~ infix_operator ~ "_"
+  | "_" ~ postfix_operator
+}
+
 
 
 // Keywords
 // Pest generates tokens for rules, but does not generate tokens
-// for exact strings in a rule. To highlight keywords we want to see them in
-// resulting token stream. That is why we add a bit of boilerplate and
+// for string terminals in a rule. To highlight keywords we want to see them
+// in the resulting token stream. That is why we add a bit of boilerplate and
 // describe keywords as rules here.
 
 kw_module = @{ "MODULE" }
 kw_extends = @{ "EXTENDS" }
 kw_variable = @{ "VARIABLE" | "VARIABLES" }
 kw_constant = @{ "CONSTANT" | "CONSTANTS" }
+
+
+prefix_operator = {
+  "-"  | "~" | "\\lnot"  | "\\neg"  | "[]" | "<>"
+  | "DOMAIN" | "ENABLED" | "SUBSET" | "UNCHANGED" | "UNION"
+}
+
+infix_operator = {
+  "!!"   | "#"  | "##"  | "$"   | "$$"  | "%"    | "%%"
+  | "&"  | "&&" | "(+)" | "(-)" | "(.)" | "(/)"  | "(\\X)"
+  | "*"  | "**" | "+"   | "++"  | "-"   | "-+->" | "--"
+  | "-|" | ".." | "..." | "/"   | "//"  | "/="   | "/\\"
+  | "::="| ":=" | ":>"  | "<"   | "<:"  | "<=>"  | "="
+  | "=<" | "=>" | "=|"  | ">"   | ">="  | "??"
+  | "@@" | "\\" | "\\/" | "^"   | "^^"  | "|"    | "|-"
+  | "|=" | "||" | "~>"  | "."   | "<="
+  | "\\approx"  | "\\geq"       | "\\oslash"     | "\\sqsupseteq"
+  | "\\asymp"   | "\\gg"        | "\\otimes"     | "\\star"
+  | "\\bigcirc" | "\\in"        | "\\prec"       | "\\subset"
+  | "\\bullet"  | "\\intersect" | "\\preceq"     | "\\subseteq"
+  | "\\cap"     | "\\land"      | "\\propto"     | "\\succ"
+  | "\\cdot"    | "\\leq"       | "\\sim"        | "\\succeq"
+  | "\\circ"    | "\\ll"        | "\\simeq"      | "\\supset"
+  | "\\cong"    | "\\lor"       | "\\sqcap"      | "\\supseteq"
+  | "\\cup"     | "\\o"         | "\\sqcup"      | "\\union"
+  | "\\div"     | "\\odot"      | "\\sqsubset"   | "\\uplus"
+  | "\\doteq"   | "\\ominus"    | "\\sqsubseteq" | "\\wr"
+  | "\\equiv"   | "\\oplus"     | "\\sqsupset"   | "\\notin"
+}
+
+postfix_operator = { "^+" | "^*" | "^#" | "'" }
+
+reserved_word = {
+  "ASSUME"         | "ELSE"      | "LOCAL"      | "UNION"
+  | "ASSUMPTION"   | "ENABLED"   | "MODULE"     | "VARIABLE"
+  | "AXIOM"        | "EXCEPT"    | "OTHER"      | "VARIABLES"
+  | "CASE"         | "EXTENDS"   | "SF_"        | "WF_"
+  | "CHOOSE"       | "IF"        | "SUBSET"     | "WITH"
+  | "CONSTANT"     | "IN"        | "THEN"
+  | "CONSTANTS"    | "INSTANCE"  | "THEOREM"    | "COROLLARY"
+  | "DOMAIN"       | "LET"       | "UNCHANGED"
+  | "BY"           | "HAVE"      | "QED"        | "TAKE"
+  | "DEF"          | "HIDE"      | "RECURSIVE"  | "USE"
+  | "DEFINE"       | "PROOF"     | "WITNESS"    | "PICK"
+  | "DEFS"         | "PROVE"     | "SUFFICES"   | "NEW"
+  | "LAMBDA"       | "STATE"     | "ACTION"     | "TEMPORAL"
+  | "OBVIOUS"      | "OMITTED"   | "LEMMA"      | "PROPOSITION"
+  | "ONLY"
+}
