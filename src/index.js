@@ -1,7 +1,7 @@
 import './style.css';
 import 'codemirror/lib/codemirror.css';
 import * as CodeMirror from 'codemirror';
-import * as Tla from './TlaMode';
+// import * as Tla from './TlaMode';
 
 const text = "---- MODULE xxx ----\nEXTENDS Integers, TLC, Sequences\n====";
 

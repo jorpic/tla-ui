@@ -10,9 +10,9 @@
   "homepage": "https://github.com/jorpic/tla-ui#readme",
   "main": "index.js",
   "scripts": {
-    "build": "webpack --config webpack.config.js",
-    "dev": "webpack --mode development",
-    "start": "webpack-dev-server",
+    "build": "preact build",
+    "dev": "preact watch",
+    "start": "preact build && preact serve",
     "lint": "eslint src"
   },
   "repository": {
@@ -29,18 +29,13 @@
     "build/*"
   ],
   "devDependencies": {
-    "copy-webpack-plugin": "^5.0.0",
-    "css-loader": "^2.1.0",
-    "eslint": "^5.14.1",
-    "eslint-config-synacor": "^3.0.3",
-    "mini-css-extract-plugin": "^0.5.0",
-    "style-loader": "^0.23.1",
-    "webpack": "^4.29.0",
-    "webpack-cli": "^3.2.3",
-    "webpack-dev-server": "^3.2.1"
+    "eslint": "^4.5.0",
+    "eslint-config-synacor": "^1.1.0",
+    "preact-cli": "^3.0.0-next.19"
   },
   "dependencies": {
     "codemirror": "^5.44.0",
+    "preact": "^8.4.2",
     "tla-parser": "^0.1.0"
   }
 }
