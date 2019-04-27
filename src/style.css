@@ -7,6 +7,7 @@ h1 {
   text-align: center;
 }
 
-.CodeMirror {
-  border: 1px solid #eee;
+/* I added `div.` to override default styles. */
+div.CodeMirror {
+  height: auto;
 }

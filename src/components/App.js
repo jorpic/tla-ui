@@ -1,4 +1,5 @@
 import { h, Component } from "preact";
+import Codemirror from "./Codemirror";
 
 export default class App extends Component {
   constructor(props) {
@@ -58,7 +59,14 @@ export default class App extends Component {
       <div class="container">
         <div class="content">
           {this.state.file && this.state.file.name}
-          {this.state.file && this.state.file.code}
+          <Codemirror
+            options={{
+              lineNumbers: true,
+              viewportMargin: Infinity // do we need this?
+            }}
+            autoFocus={true}
+            value={this.state.file ? this.state.file.code : ""}
+          />
         </div>
       </div>
     </div>
