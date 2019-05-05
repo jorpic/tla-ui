@@ -1,28 +1,22 @@
-import * as CodeMirror from 'codemirror';
-import * as Tla from 'tla-parser';
+import { parse, default as initParser } from "tla-parser";
+import wasm from  "file-loader!tla-parser/tla_parser_bg.wasm";
 
-export class Mode {
 
+export default class Mode {
   constructor() {
+    this.parse = () => null;
     this.parseTree = null;
-    this.register()
-  }
 
-  register() {
-    CodeMirror.defineMode('tla', () => {
-      return {
-        token: (stream, state) => {
-          const line = stream.lineOracle.line + 1;
-          const column = stream.column() + 1;
-          stream.skipToEnd();
-          return this.getStyle(line, column);
-        }
-      };
-    })
+    initParser(wasm) // fetch and init parser
+      .then(res => {
+        this.parse = parse;
+        console.log("tla-parser loaded:", res);
+      })
+      .catch(err => console.error("initParser:", err));
   }
 
   updateParseTree(code) {
-    this.parseTree = Tla.parse(code);
+    this.parseTree = parse(code);
     console.log("Parse tree", this.parseTree);
   }
 

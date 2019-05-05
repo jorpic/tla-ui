@@ -5,6 +5,14 @@ Using codemirror prevents us from prerendering. Building works only with
 Consider configuring code splitting to fix this.
 
 
+Building
+--------
+
+```
+cd tla-parser ; wasm-pack build --target web ; cd -
+cd ui ; preact build -no-prerender - ; cd -
+```
+
 TODO
 ----
   - Save to IDB
@@ -14,7 +22,7 @@ TODO
 GOALS
   - code colouring
   - unicode ligatures
-  - model config editor
+  - model-config editor
   - parse model checking results
   - visualize model checking trace
   - tla+ parser with human readable errors

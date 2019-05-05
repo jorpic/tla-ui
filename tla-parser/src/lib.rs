@@ -18,6 +18,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct ParseTree;
 
+#[wasm_bindgen]
 impl ParseTree {
     fn from_tokens<'a, I>(tokens: I) -> Self
         where I : IntoIterator<Item=Token<'a, Rule>>
