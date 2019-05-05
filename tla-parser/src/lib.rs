@@ -18,17 +18,16 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct ParseTree;
 
-#[wasm_bindgen]
 impl ParseTree {
     fn from_tokens<'a, I>(tokens: I) -> Self
         where I : IntoIterator<Item=Token<'a, Rule>>
     {
-        let tokens_iter = tokens.into_iter();
+        let _tokens_iter = tokens.into_iter();
         ParseTree{}
     }
 
     // FIXME: stub code
-    pub fn get_style(&self, line: u32, column: u32) -> Option<String> {
+    pub fn get_style(&self, line: u32, _column: u32) -> Option<String> {
         if line == 2 {
             Some("keyword".into())
         } else {
