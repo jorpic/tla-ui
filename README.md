@@ -30,3 +30,4 @@ GOALS
   - online parsing / intellisense
      - undefined identifier
      - type error
+  - code folding
