@@ -27,15 +27,24 @@ impl Pos {
 
 
 #[derive(Debug, PartialEq)]
-pub enum Symbol {
+pub enum Token {
+    Separator,
     Indent,
+    Identifier,
+    Keyword,
     Unknown,
 }
 
 
+pub enum State {
+    BeforeModuleHeader,
+    ModuleBody,
+}
+
 pub struct Lexer<'a> {
     str: &'a str,
     grc: GraphemeCursor,
+    state: State,
     pos: Pos,
     errors: Vec<(Pos, Error)>,
     snapshots: Vec<LexSnapshot>,
@@ -60,6 +69,7 @@ impl<'a> Lexer<'a> {
     pub fn new(s: &'a str) -> Self {
         let mut lex = Lexer {
             str: s,
+            state: State::BeforeModuleHeader,
             // Pos {col = 0, char_size = 0} represents position before first character.
             // NB. This may lead to unexpected side effects.
             pos: Pos{col: 0, line: 1, byte_offset: 0, char_size: 0},
@@ -71,8 +81,13 @@ impl<'a> Lexer<'a> {
         lex
     }
 
-    pub fn current_char(&self) -> &str { // FIXME: errors?
+    pub fn current_char(&self) -> &str { // FIXME: return error if EOF or MalformedUnicode
         self.pos.current_char(self.str)
+    }
+
+
+    pub fn substring(&self, start: &Pos, end: &Pos) -> &str {
+        &self.str[start.byte_offset .. end.byte_offset]
     }
 
 
@@ -181,13 +196,84 @@ impl<'a> Lexer<'a> {
             self.errors.push((self.pos, Error::FailedExpectation(s)));
         }
     }
+
+    pub fn ident(&mut self) -> bool {
+        self.save_snapshot();
+        // FIXME: TLA+ actually allows identifiers starting with a digit.
+        if !self.current_char().chars().all(|c| c.is_ascii_alphabetic() || c == '_') {
+            self.restore_snapshot();
+            return false;
+        }
+        loop {
+            if !self.next_char() { break; }
+            let valid_char = self.current_char().chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if !valid_char { break; }
+        }
+        self.drop_snapshot();
+        return true;
+    }
+
+
+    // FIXME: do not push errors to vector, just return them here.
+    // Delegate responsibility to collect errors to the parser.
+    pub fn next_token(&mut self) -> Option<(Pos, Pos, Token)> {
+        match self.state {
+            State::BeforeModuleHeader => {
+                if self.skip_until("----") {
+                    self.state = State::ModuleBody;
+                    let start = self.pos;
+                    let mut end = self.pos;
+                    loop {
+                        end = self.pos;
+                        if !self.skip("-") { break; }
+                    }
+                    return Some((start, end, Token::Separator));
+                } else {
+                    return None; // FIXME: push error
+                }
+            },
+            _ => match self.current_char() {
+                " " | "\t" => {
+                    self.skip_whitespace();
+                    return self.next_token();
+                },
+                "\n" | "\r\n" => {
+                    self.next_char();
+                    let start = self.pos;
+                    self.skip_whitespace(); // FIXME: return span
+                    let end = self.pos;
+                    return Some((start, end, Token::Indent));
+                }
+
+                _ => {
+                    let start = self.pos;
+                    if self.ident() {
+                        let end = self.pos;
+                        let name = self.substring(&start, &end);
+                        if name == "MODULE" {
+                            return Some((start, end, Token::Keyword));
+                        }
+                        return Some((start, end, Token::Identifier));
+                    }
+                    return None;
+                }
+            }
+        }
+    }
 }
 
+
+// TODO:
+// - Keyword table (&'staticc str, Token)
+// - Handle end of string
+// - struct Lexeme {start, end, token}
+// - drop errors
 
 
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Symbol};
+    use super::{Lexer, Token};
 
     #[test]
     pub fn xxx() {
@@ -209,6 +295,17 @@ mod tests {
 
         lx.restore_snapshot();
         assert_eq!(lx.current_char(), "x");
+    }
+
+    #[test]
+    pub fn yyy() {
+        let s = "x         ---- \n    MODULE hello";
+        let mut lx = Lexer::new(s);
+        lx.next_token();
+        lx.next_token();
+        lx.next_token();
+        lx.next_token();
+        assert_eq!(lx.next_token(), None);
     }
 }
 
