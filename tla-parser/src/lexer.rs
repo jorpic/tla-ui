@@ -1,6 +1,31 @@
 use std::str;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Keyword {
+    Module,
+    Extends,
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TokenType {
+    Separator,
+    Indent,
+    Identifier,
+    Wildcard,
+    Keyword(Keyword),
+    Unknown,
+}
+
+static KEYWORDS: &'static [(&'static str, TokenType)] = &[
+    ("EXTENDS", TokenType::Keyword(Keyword::Extends)),
+    ("MODULE", TokenType::Keyword(Keyword::Module)),
+    ("_", TokenType::Wildcard),
+];
+
+
 /// Specifies a position in a string.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pos {
@@ -25,21 +50,11 @@ impl Pos {
 }
 
 
-
-#[derive(Debug, PartialEq)]
-pub enum Token {
-    Separator,
-    Indent,
-    Identifier,
-    Keyword,
-    Unknown,
-}
-
-
 pub enum State {
     BeforeModuleHeader,
     ModuleBody,
 }
+
 
 pub struct Lexer<'a> {
     str: &'a str,
@@ -176,7 +191,7 @@ impl<'a> Lexer<'a> {
     pub fn skip(&mut self, s: &str) -> bool {
         let mut premature_end_of_string = false;
         self.save_snapshot();
-        for (i, c) in s.chars().enumerate() {
+        for c in s.chars() {
             if premature_end_of_string || self.current_char() != c.to_string() {
                 self.restore_snapshot();
                 return false;
@@ -217,18 +232,17 @@ impl<'a> Lexer<'a> {
 
     // FIXME: do not push errors to vector, just return them here.
     // Delegate responsibility to collect errors to the parser.
-    pub fn next_token(&mut self) -> Option<(Pos, Pos, Token)> {
+    pub fn next_token(&mut self) -> Option<(Pos, Pos, TokenType)> {
         match self.state {
             State::BeforeModuleHeader => {
                 if self.skip_until("----") {
                     self.state = State::ModuleBody;
                     let start = self.pos;
-                    let mut end = self.pos;
                     loop {
-                        end = self.pos;
-                        if !self.skip("-") { break; }
+                        if !self.skip("-") {
+                            return Some((start, self.pos, TokenType::Separator));
+                        }
                     }
-                    return Some((start, end, Token::Separator));
                 } else {
                     return None; // FIXME: push error
                 }
@@ -243,7 +257,7 @@ impl<'a> Lexer<'a> {
                     let start = self.pos;
                     self.skip_whitespace(); // FIXME: return span
                     let end = self.pos;
-                    return Some((start, end, Token::Indent));
+                    return Some((start, end, TokenType::Indent));
                 }
 
                 _ => {
@@ -251,10 +265,10 @@ impl<'a> Lexer<'a> {
                     if self.ident() {
                         let end = self.pos;
                         let name = self.substring(&start, &end);
-                        if name == "MODULE" {
-                            return Some((start, end, Token::Keyword));
+                        match KEYWORDS.binary_search_by_key(&name, |t| t.0) {
+                            Ok(i) => return Some((start, end, KEYWORDS[i].1)),
+                            _ => return Some((start, end, TokenType::Identifier)),
                         }
-                        return Some((start, end, Token::Identifier));
                     }
                     return None;
                 }
@@ -265,15 +279,15 @@ impl<'a> Lexer<'a> {
 
 
 // TODO:
-// - Keyword table (&'staticc str, Token)
 // - Handle end of string
 // - struct Lexeme {start, end, token}
 // - drop errors
+// - better lexer tests
 
 
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Token};
+    use super::Lexer;
 
     #[test]
     pub fn xxx() {
