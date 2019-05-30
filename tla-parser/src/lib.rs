@@ -6,10 +6,8 @@ static ALLOC: WeeAlloc = WeeAlloc::INIT;
 use wasm_bindgen::prelude::*;
 mod lexer;
 
-
 #[wasm_bindgen]
 pub struct ParseTree;
-
 
 #[wasm_bindgen]
 impl ParseTree {
@@ -22,8 +20,7 @@ impl ParseTree {
     }
 }
 
-
 #[wasm_bindgen]
 pub fn parse(_code: &str) -> Result<ParseTree, JsValue> {
-    Ok(ParseTree{})
+    Ok(ParseTree {})
 }
