@@ -2,14 +2,14 @@ use std::str;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum Keyword {
     Module,
     Extends,
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum TokenType {
     Separator,
     Indent,
@@ -19,6 +19,7 @@ pub enum TokenType {
     Unknown,
 }
 
+
 static KEYWORDS: &'static [(&'static str, TokenType)] = &[
     ("EXTENDS", TokenType::Keyword(Keyword::Extends)),
     ("MODULE", TokenType::Keyword(Keyword::Module)),
@@ -27,7 +28,7 @@ static KEYWORDS: &'static [(&'static str, TokenType)] = &[
 
 
 /// Specifies a position in a string.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Pos {
     /// Line number.
     pub line: usize,
@@ -40,43 +41,34 @@ pub struct Pos {
 }
 
 
-impl Pos {
-    // FIXME: explain why we represent current char with &str.
-    // This is because current char is actually a grapheme that may be represented as a unicode
-    // point with a modifier. E.g. 'e' and acute.
-    pub fn current_char<'a>(&self, str: &'a str) -> &'a str {
-        &str[self.byte_offset .. self.byte_offset + self.char_size]
-    }
-}
-
-
-pub enum State {
-    BeforeModuleHeader,
-    ModuleBody,
-}
-
-
 pub struct Lexer<'a> {
     str: &'a str,
     grc: GraphemeCursor,
-    state: State,
+    state: LexerState,
     pos: Pos,
-    errors: Vec<(Pos, Error)>,
     snapshots: Vec<LexSnapshot>,
 }
 
 
+#[derive(Debug, Clone, Copy)]
+pub enum LexerState {
+    BeforeModuleHeader,
+    ModuleBody,
+    // Comment(usize), // depth
+}
+
+
 struct LexSnapshot {
-    // current state: Char('-'), ident, comment(depth)
+    state: LexerState,
     pos: Pos,
 }
 
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    InvalidUnicodeChar,
-    UnicodeGrapheme(GraphemeIncomplete),
-    FailedExpectation(&'static str)
+    EndOfString,
+    MalformedGrapheme(GraphemeIncomplete),
+    NotRecognized,
 }
 
 
@@ -84,20 +76,23 @@ impl<'a> Lexer<'a> {
     pub fn new(s: &'a str) -> Self {
         let mut lex = Lexer {
             str: s,
-            state: State::BeforeModuleHeader,
+            state: LexerState::BeforeModuleHeader,
             // Pos {col = 0, char_size = 0} represents position before first character.
             // NB. This may lead to unexpected side effects.
             pos: Pos{col: 0, line: 1, byte_offset: 0, char_size: 0},
             grc: GraphemeCursor::new(0, s.len(), true),
-            errors: Vec::new(),
             snapshots: Vec::new(),
         };
-        lex.next_char();
+        let _ = lex.next_char();
         lex
     }
 
+
+    // Why we represent current char with &str?
+    // This is because current char is actually a grapheme that may be
+    // represented as a unicode point with a modifier. E.g. 'e' and acute.
     pub fn current_char(&self) -> &str { // FIXME: return error if EOF or MalformedUnicode
-        self.pos.current_char(self.str)
+        &self.str[self.pos.byte_offset .. self.pos.byte_offset + self.pos.char_size]
     }
 
 
@@ -106,111 +101,104 @@ impl<'a> Lexer<'a> {
     }
 
 
-    // FIXME: return Result<&str, (EOS | MalformedUnicode)>
-    pub fn next_char(&mut self) -> bool {
-        let mut pos = self.pos;
-        let prev_char = pos.current_char(self.str); // returns "" if there is no prev char
-        pos.byte_offset += pos.char_size;
-        self.grc.set_cursor(pos.byte_offset); // move cursor behind the current char
+    // In case of error `self.pos` is not changed.
+    pub fn next_char(&mut self) -> Result<(), Error>  {
+        // Find where next character ends.
+        let byte_offset = self.pos.byte_offset + self.pos.char_size;
+        self.grc.set_cursor(byte_offset); // move cursor behind the current char
         let next_offset = match self.grc.next_boundary(self.str, 0) {
             Ok(Some(end)) => end,
-            Ok(None) => return false, // End of string reached
-            Err(err) => {
-                self.errors.push((pos, Error::UnicodeGrapheme(err)));
-                return false;
-            }
+            Ok(None) => return Err(Error::EndOfString),
+            Err(err) => return Err(Error::MalformedGrapheme(err)),
         };
-
-        pos.char_size = next_offset - pos.byte_offset;
-        match prev_char {
-            "\n" | "\r\n" => {
-                pos.line += 1;
-                pos.col = 1;
-            },
-            "\t" => {
-                pos.col += 4; // FIXME:
-            },
-            _ => {
-                pos.col += 1;
-            }
-        }
-
-        self.pos = pos;
-        return true;
+        let char_size = next_offset - byte_offset;
+        // Update line and column depending on previous char.
+        let prev_char = self.current_char(); // returns "" if there is no prev char
+        let (line, col) = match prev_char {
+            "\n" | "\r\n" => (self.pos.line + 1, 1),
+            "\t"          => (self.pos.line, self.pos.col + 4), // FIXME: tab_size
+            _             => (self.pos.line, self.pos.col + 1),
+        };
+        self.pos = Pos {line, col, byte_offset, char_size};
+        Ok(())
     }
 
 
     pub fn save_snapshot(&mut self) {
-        self.snapshots.push(LexSnapshot{pos: self.pos});
+        self.snapshots.push(LexSnapshot{pos: self.pos, state: self.state});
     }
 
 
     pub fn restore_snapshot(&mut self) {
-        debug_assert!(self.snapshots.len() > 0);
-        let LexSnapshot{pos} = self.snapshots.pop().expect("no snapshot to restore");
+        debug_assert!(!self.snapshots.is_empty());
+        let LexSnapshot{pos, state} = self.snapshots.pop().expect("no snapshot to restore");
         self.pos = pos;
+        self.state = state;
     }
 
 
     pub fn drop_snapshot(&mut self) {
-        debug_assert!(self.snapshots.len() > 0);
+        debug_assert!(!self.snapshots.is_empty());
         self.snapshots.pop();
     }
 
 
-    pub fn skip_whitespace(&mut self) {
+    pub fn skip_whitespace(&mut self) -> Result<(), Error> {
         loop {
             let c = self.current_char();
-            if c != " " && c != "\t" {
-                break;
-            }
-            if !self.next_char() { break; } // FIXME: end of string
+            if c != " " && c != "\t" { break; }
+            if let Err(err) = self.next_char() { return Err(err); }
         }
+        Ok(())
     }
 
 
-    pub fn skip_until(&mut self, s: &str) -> bool {
-        self.save_snapshot();
+    // NB: Does not revert state in case of error.
+    pub fn skip_until(&mut self, s: &str) -> Result<(), Error> {
         loop {
             let str = &self.str[self.pos.byte_offset..];
             if str.starts_with(s) {
-                self.drop_snapshot();
-                return true;
+                return Ok(());
             }
-            if !self.next_char() {
-                // FIXME: restore snapshot in case of end of string
-                // Fail hard and save error position in case of malformed unicode
-                self.restore_snapshot();
-                return false;
+            if let Err(err) = self.next_char() {
+                return Err(err);
             }
         }
     }
 
 
-    // Does not support complex graphemes in `s`.
-    pub fn skip(&mut self, s: &str) -> bool {
+    // NB. Does not support complex graphemes in `s`.
+    pub fn skip(&mut self, s: &str) -> Result<bool, Error> {
         let mut premature_end_of_string = false;
         self.save_snapshot();
         for c in s.chars() {
             if premature_end_of_string || self.current_char() != c.to_string() {
                 self.restore_snapshot();
-                return false;
+                return Ok(false);
             }
-            if !self.next_char() { // FIXME: EOS vs MalformedUnicode
-                premature_end_of_string = true;
+            match self.next_char() {
+                Ok(_) => {},
+                Err(Error::EndOfString) => {
+                    premature_end_of_string = true;
+                },
+                Err(err) => return Err(err), // only MalformedGrapheme is possible
             }
         }
         self.drop_snapshot();
-        return true;
+        Ok(true)
     }
 
 
-    // Same as skip, but generates error if expected string is not found.
-    pub fn expect(&mut self, s: &'static str) {
-        if !self.skip(s) {
-            self.errors.push((self.pos, Error::FailedExpectation(s)));
+    pub fn skip_many(&mut self, s: &str) -> Result<(), Error> {
+        loop {
+            match self.skip(s) {
+                Ok(true) => {},
+                Ok(false) | Err(Error::EndOfString) => return Ok(()),
+                Err(err) => return Err(err),
+            }
         }
     }
+
 
     pub fn ident(&mut self) -> bool {
         self.save_snapshot();
@@ -220,69 +208,52 @@ impl<'a> Lexer<'a> {
             return false;
         }
         loop {
-            if !self.next_char() { break; }
+            if self.next_char().is_err() { break; } // FIXME: propagate error
             let valid_char = self.current_char().chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_');
             if !valid_char { break; }
         }
         self.drop_snapshot();
-        return true;
+        true
     }
 
 
-    // FIXME: do not push errors to vector, just return them here.
-    // Delegate responsibility to collect errors to the parser.
-    pub fn next_token(&mut self) -> Option<(Pos, Pos, TokenType)> {
+    pub fn next_token(&mut self) -> Result<(Pos, Pos, TokenType), Error> {
+        let start = self.pos;
         match self.state {
-            State::BeforeModuleHeader => {
-                if self.skip_until("----") {
-                    self.state = State::ModuleBody;
-                    let start = self.pos;
-                    loop {
-                        if !self.skip("-") {
-                            return Some((start, self.pos, TokenType::Separator));
-                        }
-                    }
-                } else {
-                    return None; // FIXME: push error
-                }
-            },
+            LexerState::BeforeModuleHeader => self.skip_until("----").and_then(|_| {
+                self.state = LexerState::ModuleBody;
+                self.next_token()
+            }),
             _ => match self.current_char() {
-                " " | "\t" => {
-                    self.skip_whitespace();
-                    return self.next_token();
+                " " | "\t" => self.skip_whitespace().and_then(|_| self.next_token()),
+                "\n" | "\r\n" => self.next_char().and_then(|_| {
+                    let another_start = self.pos; // Don't include CR in the token span.
+                    self.skip_whitespace()
+                        .map(|_| (another_start, self.pos, TokenType::Indent))
+                }),
+                "-" => match self.skip("----") {
+                    Ok(true) => self.skip_many("-")
+                        .map(|_| (start, self.pos, TokenType::Separator)),
+                    Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
+                    Err(err) => Err(err),
                 },
-                "\n" | "\r\n" => {
-                    self.next_char();
-                    let start = self.pos;
-                    self.skip_whitespace(); // FIXME: return span
-                    let end = self.pos;
-                    return Some((start, end, TokenType::Indent));
-                }
-
                 _ => {
-                    let start = self.pos;
                     if self.ident() {
                         let end = self.pos;
                         let name = self.substring(&start, &end);
                         match KEYWORDS.binary_search_by_key(&name, |t| t.0) {
-                            Ok(i) => return Some((start, end, KEYWORDS[i].1)),
-                            _ => return Some((start, end, TokenType::Identifier)),
+                            Ok(i) => return Ok((start, end, KEYWORDS[i].1)),
+                            _ => return Ok((start, end, TokenType::Identifier)),
                         }
                     }
-                    return None;
+                    Err(Error::NotRecognized)
                 }
             }
         }
     }
 }
 
-
-// TODO:
-// - Handle end of string
-// - struct Lexeme {start, end, token}
-// - drop errors
-// - better lexer tests
 
 
 #[cfg(test)]
@@ -319,7 +290,6 @@ mod tests {
         lx.next_token();
         lx.next_token();
         lx.next_token();
-        assert_eq!(lx.next_token(), None);
     }
 }
 
