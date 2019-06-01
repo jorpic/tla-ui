@@ -75,7 +75,7 @@ impl<'a> Lexer<'a> {
             // Pos {col = 0, char_size = 0} represents position before first character.
             // NB. This may lead to unexpected side effects.
             pos: Pos {
-                col: 0,
+                col: 1,
                 line: 1,
                 byte_offset: 0,
                 char_size: 0,
@@ -99,31 +99,42 @@ impl<'a> Lexer<'a> {
         &self.str[start.byte_offset..end.byte_offset]
     }
 
-    // In case of error `self.pos` is not changed.
     pub fn next_char(&mut self) -> Result<(), Error> {
-        // Find where next character ends.
-        let byte_offset = self.pos.byte_offset + self.pos.char_size;
-        self.grc.set_cursor(byte_offset); // move cursor behind the current char
-        let next_offset = match self.grc.next_boundary(self.str, 0) {
-            Ok(Some(end)) => end,
-            Ok(None) => return Err(Error::EndOfString),
-            Err(err) => return Err(Error::MalformedGrapheme(err)),
+        // Next character starts immediately after the current one.
+        self.pos.byte_offset = self.pos.byte_offset + self.pos.char_size;
+        self.grc.set_cursor(self.pos.byte_offset);
+        // Check next character and determine its size in bytes.
+        // char_size == 0 encodes exceptional cases:
+        //      - position before the first char
+        //      - position after the last char
+        //      - position at a malformed unicode grapheme
+        let res = match self.grc.next_boundary(self.str, 0) {
+            Ok(Some(end)) => {
+                self.pos.char_size = end - self.pos.byte_offset;
+                Ok(())
+            }
+            Ok(None) => {
+                self.pos.char_size = 0;
+                Err(Error::EndOfString)
+            }
+            Err(err) => {
+                self.pos.char_size = 0;
+                Err(Error::MalformedGrapheme(err))
+            }
         };
-        let char_size = next_offset - byte_offset;
+        // Returns "" before the start, at the end of string, at the error.
+        let prev_char = self.current_char();
         // Update line and column depending on previous char.
-        let prev_char = self.current_char(); // returns "" if there is no prev char
-        let (line, col) = match prev_char {
-            "\n" | "\r\n" => (self.pos.line + 1, 1),
-            "\t" => (self.pos.line, self.pos.col + 4), // FIXME: tab_size
-            _ => (self.pos.line, self.pos.col + 1),
-        };
-        self.pos = Pos {
-            line,
-            col,
-            byte_offset,
-            char_size,
-        };
-        Ok(())
+        match prev_char {
+            "\n" | "\r\n" => {
+                self.pos.line += 1;
+                self.pos.col = 1;
+            }
+            "\t" => self.pos.col += 4, // FIXME: tab_size
+            "" => {}
+            _ => self.pos.col += 1,
+        }
+        res
     }
 
     pub fn save_snapshot(&mut self) {
@@ -176,7 +187,11 @@ impl<'a> Lexer<'a> {
         let mut premature_end_of_string = false;
         self.save_snapshot();
         for c in s.chars() {
-            if premature_end_of_string || self.current_char() != c.to_string() {
+            if premature_end_of_string {
+                self.restore_snapshot();
+                return Ok(false);
+            }
+            if self.current_char() != c.to_string() {
                 self.restore_snapshot();
                 return Ok(false);
             }
@@ -278,6 +293,75 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Lexer, Error, TokenType};
+
+    #[test]
+    fn next_char() {
+        let mut lx = Lexer::new("");
+        assert_eq!(lx.current_char(), "");
+        assert_eq!(lx.next_char(), Err(Error::EndOfString));
+        let eos_pos = lx.pos;
+        assert_eq!(lx.next_char(), Err(Error::EndOfString)); // idempotent
+        assert_eq!(lx.pos, eos_pos); // position does not change
+
+        let mut lx = Lexer::new("x");
+        assert_eq!(lx.current_char(), "x");
+        assert_eq!(lx.next_char(), Err(Error::EndOfString));
+        assert_eq!(lx.current_char(), "");
+        assert_eq!(lx.next_char(), Err(Error::EndOfString));
+    }
+
+    #[test]
+    fn skip() {
+        let mut lx = Lexer::new("xyz");
+        assert_eq!(lx.skip("x"), Ok(true));
+        assert_eq!(lx.current_char(), "y"); // advance if match
+        let mut lx = Lexer::new("abc");
+        assert_eq!(lx.skip("x"), Ok(false));
+        assert_eq!(lx.current_char(), "a"); // backtrack if no match
+
+        let mut lx = Lexer::new("x");
+        assert_eq!(lx.current_char(), "x");
+        assert_eq!(lx.skip("x"), Ok(true));
+        assert_eq!(lx.current_char(), "");
+        assert_eq!(lx.skip("x"), Ok(false));
+    }
+
+    #[test]
+    fn skip_many() {
+        let mut lx = Lexer::new("++++*");
+        assert_eq!(lx.skip_many("+"), Ok(()));
+        assert_eq!(lx.current_char(), "*");
+
+        let mut lx = Lexer::new("++++");
+        assert_eq!(lx.skip_many("+"), Ok(()));
+        assert_eq!(lx.current_char(), "");
+    }
+
+    #[test]
+    fn skip_until() {
+        let mut lx = Lexer::new("++++xyz");
+        assert_eq!(lx.skip_until("xyz"), Ok(()));
+        assert_eq!(lx.current_char(), "x");
+
+        let mut lx = Lexer::new("");
+        assert_eq!(lx.skip_until("xyz"), Err(Error::EndOfString));
+    }
+
+    #[test]
+    fn module_header() -> Result<(), Error> {
+        let mut lx = Lexer::new("");
+        assert_eq!(lx.next_token(), Err(Error::EndOfString));
+        let mut lx = Lexer::new(" --- ");
+        assert_eq!(lx.next_token(), Err(Error::EndOfString));
+
+        let mut lx = Lexer::new("----");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        assert_eq!(lx.next_token(), Err(Error::EndOfString));
+        let mut lx = Lexer::new("------------");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        assert_eq!(lx.next_token(), Err(Error::EndOfString));
+        Ok(())
+    }
 
     #[test]
     fn line_comment() -> Result<(), Error> {
