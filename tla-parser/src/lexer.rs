@@ -1,17 +1,21 @@
+#![allow(dead_code)]
+
 use std::str;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Keyword {
     Module,
     Extends,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenType {
     Separator,
     Indent,
     Identifier,
+    CommentLine,
+    CommentBlock,
     Wildcard,
     Keyword(Keyword),
     Unknown,
@@ -24,7 +28,7 @@ static KEYWORDS: &'static [(&'static str, TokenType)] = &[
 ];
 
 /// Specifies a position in a string.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pos {
     /// Line number.
     pub line: usize,
@@ -181,7 +185,7 @@ impl<'a> Lexer<'a> {
                 Err(Error::EndOfString) => {
                     premature_end_of_string = true;
                 }
-                Err(err) => return Err(err), // only MalformedGrapheme is possible
+                Err(err) => return Err(err), // only MalformedGrapheme is possible here
             }
         }
         self.drop_snapshot();
@@ -198,7 +202,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn ident(&mut self) -> bool {
+    pub fn ident(&mut self) -> Result<bool, Error> {
         self.save_snapshot();
         // FIXME: TLA+ actually allows identifiers starting with a digit.
         if !self
@@ -207,22 +211,21 @@ impl<'a> Lexer<'a> {
             .all(|c| c.is_ascii_alphabetic() || c == '_')
         {
             self.restore_snapshot();
-            return false;
+            return Ok(false);
         }
         loop {
-            if self.next_char().is_err() {
-                break;
-            } // FIXME: propagate error
+            if let Err(err) = self.next_char() {
+                return Err(err);
+            }
             let valid_char = self
                 .current_char()
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_');
             if !valid_char {
-                break;
+                self.drop_snapshot();
+                return Ok(true);
             }
         }
-        self.drop_snapshot();
-        true
     }
 
     pub fn next_token(&mut self) -> Result<(Pos, Pos, TokenType), Error> {
@@ -245,17 +248,27 @@ impl<'a> Lexer<'a> {
                         .map(|_| (start, self.pos, TokenType::Separator)),
                     Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
                     Err(err) => Err(err),
-                },
-                _ => {
-                    if self.ident() {
+                }
+                "\\" => match self.skip("\\*") {
+                    Ok(true) => match self.skip_until("\n") {
+                        Ok(_) | Err(Error::EndOfString) =>
+                            Ok((start, self.pos, TokenType::CommentLine)),
+                        Err(err) => Err(err),
+                    }
+                    Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
+                    Err(err) => Err(err),
+                }
+                _ => match self.ident() {
+                    Ok(true) => {
                         let end = self.pos;
                         let name = self.substring(&start, &end);
                         match KEYWORDS.binary_search_by_key(&name, |t| t.0) {
-                            Ok(i) => return Ok((start, end, KEYWORDS[i].1)),
-                            _ => return Ok((start, end, TokenType::Identifier)),
+                            Ok(i) => Ok((start, end, KEYWORDS[i].1)),
+                            _ => Ok((start, end, TokenType::Identifier)),
                         }
                     }
-                    Err(Error::NotRecognized)
+                    Ok(false) => Err(Error::NotRecognized),
+                    Err(err) => Err(err),
                 }
             },
         }
@@ -264,41 +277,14 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::Lexer;
+    use super::{Lexer, Error, TokenType};
 
     #[test]
-    pub fn xxx() {
-        let s = "x         ---- MODULE hello\r\ny̆es❤\r\nh";
-        let mut lx = Lexer::new(s);
-        assert_eq!(lx.current_char(), "x");
-        assert_eq!(lx.pos.col, 1);
-        assert_eq!(lx.pos.line, 1);
-
-        lx.save_snapshot();
-        lx.next_char();
-        lx.skip_whitespace();
-        assert_eq!(lx.current_char(), "-");
-        assert_eq!(lx.pos.col, 11);
-        loop {
-            if !lx.skip("-") {
-                break;
-            }
-        }
-        lx.skip_whitespace();
-        assert_eq!(lx.skip("MODULE"), true);
-        lx.skip_whitespace();
-
-        lx.restore_snapshot();
-        assert_eq!(lx.current_char(), "x");
-    }
-
-    #[test]
-    pub fn yyy() {
-        let s = "x         ---- \n    MODULE hello";
-        let mut lx = Lexer::new(s);
-        lx.next_token();
-        lx.next_token();
-        lx.next_token();
-        lx.next_token();
+    fn line_comment() -> Result<(), Error> {
+        let mut lx = Lexer::new("---- \\* hello world");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        assert_eq!(lx.next_token()?.2, TokenType::CommentLine);
+        assert_eq!(lx.next_token(), Err(Error::EndOfString));
+        Ok(())
     }
 }
