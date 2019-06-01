@@ -101,7 +101,7 @@ impl<'a> Lexer<'a> {
         &self.str[start.byte_offset..end.byte_offset]
     }
 
-    pub fn next_char(&mut self) -> Result<(), Error> {
+    pub fn next_char(&mut self) -> Result<bool, Error> {
         // Next character starts immediately after the current one.
         self.pos.byte_offset = self.pos.byte_offset + self.pos.char_size;
         self.grc.set_cursor(self.pos.byte_offset);
@@ -113,11 +113,11 @@ impl<'a> Lexer<'a> {
         let res = match self.grc.next_boundary(self.str, 0) {
             Ok(Some(end)) => {
                 self.pos.char_size = end - self.pos.byte_offset;
-                Ok(())
+                Ok(true)
             }
             Ok(None) => {
                 self.pos.char_size = 0;
-                Err(Error::EndOfString)
+                Ok(false)
             }
             Err(err) => {
                 self.pos.char_size = 0;
@@ -158,28 +158,30 @@ impl<'a> Lexer<'a> {
         self.snapshots.pop();
     }
 
-    pub fn skip_whitespace(&mut self) -> Result<(), Error> {
+    pub fn skip_whitespace(&mut self) -> Result<bool, Error> {
         loop {
             let c = self.current_char();
             if c != " " && c != "\t" {
                 break;
             }
-            if let Err(err) = self.next_char() {
-                return Err(err);
+            let next = self.next_char();
+            if next != Ok(true) {
+                return next;
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     // NB: Does not revert state in case of error.
-    pub fn skip_until(&mut self, s: &str) -> Result<(), Error> {
+    pub fn skip_until(&mut self, s: &str) -> Result<bool, Error> {
         loop {
             let str = &self.str[self.pos.byte_offset..];
             if str.starts_with(s) {
-                return Ok(());
+                return Ok(true);
             }
-            if let Err(err) = self.next_char() {
-                return Err(err);
+            match self.next_char() {
+                Ok(true) => {},
+                err => return err,
             }
         }
     }
@@ -198,23 +200,23 @@ impl<'a> Lexer<'a> {
                 return Ok(false);
             }
             match self.next_char() {
-                Ok(_) => {}
-                Err(Error::EndOfString) => {
+                Ok(true) => {}
+                Ok(false) => {
                     premature_end_of_string = true;
                 }
-                Err(err) => return Err(err), // only MalformedGrapheme is possible here
+                err => return err, // only MalformedGrapheme is possible here
             }
         }
         self.drop_snapshot();
         Ok(true)
     }
 
-    pub fn skip_many(&mut self, s: &str) -> Result<(), Error> {
+    pub fn skip_many(&mut self, s: &str) -> Result<bool, Error> {
         loop {
             match self.skip(s) {
                 Ok(true) => {}
-                Ok(false) | Err(Error::EndOfString) => return Ok(()),
-                Err(err) => return Err(err),
+                Ok(false) => return Ok(true),
+                err => return err,
             }
         }
     }
@@ -247,10 +249,7 @@ impl<'a> Lexer<'a> {
 
     pub fn line_comment(&mut self) -> Result<bool, Error> {
         match self.skip("\\*") {
-            Ok(true) => match self.skip_until("\n") {
-                Ok(_) | Err(Error::EndOfString) => Ok(true),
-                Err(err) => Err(err),
-            }
+            Ok(true) => self.skip_until("\n").map(|_| true), // end of line is a valid terminator
             res => res,
         }
     }
@@ -261,8 +260,8 @@ impl<'a> Lexer<'a> {
                 let mut depth = 1;
                 while depth > 0 {
                     match self.next_char() {
-                        Ok(()) => {},
-                        Err(Error::EndOfString) => return Err(Error::UnclosedBlockComment),
+                        Ok(true) => {},
+                        Ok(false) => return Err(Error::UnclosedBlockComment),
                         Err(err) => return Err(err),
                     }
                     match self.skip("(*") {
@@ -285,11 +284,16 @@ impl<'a> Lexer<'a> {
     pub fn next_token(&mut self) -> Result<(Pos, Pos, TokenType), Error> {
         let start = self.pos;
         match self.state {
-            LexerState::BeforeModuleHeader => self.skip_until("----").and_then(|_| {
-                self.state = LexerState::ModuleBody;
-                self.next_token()
-            }),
+            LexerState::BeforeModuleHeader => match self.skip_until("----") {
+                Ok(true) => {
+                    self.state = LexerState::ModuleBody;
+                    self.next_token()
+                },
+                Ok(false) => Err(Error::EndOfString),
+                Err(err) => Err(err),
+            }
             _ => match self.current_char() {
+                "" => Err(Error::EndOfString),
                 " " | "\t" => self.skip_whitespace().and_then(|_| self.next_token()),
                 "\n" | "\r\n" => self.next_char().and_then(|_| {
                     let another_start = self.pos; // Don't include CR in the token span.
@@ -339,16 +343,16 @@ mod tests {
     fn next_char() {
         let mut lx = Lexer::new("");
         assert_eq!(lx.current_char(), "");
-        assert_eq!(lx.next_char(), Err(Error::EndOfString));
+        assert_eq!(lx.next_char(), Ok(false));
         let eos_pos = lx.pos;
-        assert_eq!(lx.next_char(), Err(Error::EndOfString)); // idempotent
+        assert_eq!(lx.next_char(), Ok(false)); // idempotent
         assert_eq!(lx.pos, eos_pos); // position does not change
 
         let mut lx = Lexer::new("x");
         assert_eq!(lx.current_char(), "x");
-        assert_eq!(lx.next_char(), Err(Error::EndOfString));
+        assert_eq!(lx.next_char(), Ok(false));
         assert_eq!(lx.current_char(), "");
-        assert_eq!(lx.next_char(), Err(Error::EndOfString));
+        assert_eq!(lx.next_char(), Ok(false));
     }
 
     #[test]
@@ -370,22 +374,23 @@ mod tests {
     #[test]
     fn skip_many() {
         let mut lx = Lexer::new("++++*");
-        assert_eq!(lx.skip_many("+"), Ok(()));
+        assert_eq!(lx.skip_many("+"), Ok(true));
         assert_eq!(lx.current_char(), "*");
 
         let mut lx = Lexer::new("++++");
-        assert_eq!(lx.skip_many("+"), Ok(()));
+        assert_eq!(lx.skip_many("+"), Ok(true));
         assert_eq!(lx.current_char(), "");
     }
 
     #[test]
-    fn skip_until() {
+    fn skip_until() -> Result<(), Error> {
         let mut lx = Lexer::new("++++xyz");
-        assert_eq!(lx.skip_until("xyz"), Ok(()));
+        assert_eq!(lx.skip_until("xyz"), Ok(true));
         assert_eq!(lx.current_char(), "x");
 
         let mut lx = Lexer::new("");
-        assert_eq!(lx.skip_until("xyz"), Err(Error::EndOfString));
+        assert_eq!(lx.skip_until("xyz"), Ok(false));
+        Ok(())
     }
 
     #[test]
