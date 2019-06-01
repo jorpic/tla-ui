@@ -14,10 +14,11 @@ pub enum TokenType {
     Separator,
     Indent,
     Identifier,
-    CommentLine,
-    CommentBlock,
+    Comment,
     Wildcard,
     Keyword(Keyword),
+    ParenOpen,
+    ParenClose,
     Unknown,
 }
 
@@ -52,7 +53,6 @@ pub struct Lexer<'a> {
 pub enum LexerState {
     BeforeModuleHeader,
     ModuleBody,
-    // Comment(usize), // depth
 }
 
 struct LexSnapshot {
@@ -64,6 +64,8 @@ struct LexSnapshot {
 pub enum Error {
     EndOfString,
     MalformedGrapheme(GraphemeIncomplete),
+    UnclosedBlockComment,
+    UnpairedCommentClosing,
     NotRecognized,
 }
 
@@ -243,6 +245,43 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub fn line_comment(&mut self) -> Result<bool, Error> {
+        match self.skip("\\*") {
+            Ok(true) => match self.skip_until("\n") {
+                Ok(_) | Err(Error::EndOfString) => Ok(true),
+                Err(err) => Err(err),
+            }
+            res => res,
+        }
+    }
+
+    pub fn block_comment(&mut self) -> Result<bool, Error> {
+        match self.skip("(*") {
+            Ok(true) => {
+                let mut depth = 1;
+                while depth > 0 {
+                    match self.next_char() {
+                        Ok(()) => {},
+                        Err(Error::EndOfString) => return Err(Error::UnclosedBlockComment),
+                        Err(err) => return Err(err),
+                    }
+                    match self.skip("(*") {
+                        Ok(true) => depth += 1,
+                        Ok(false) => {},
+                        Err(err) => return Err(err),
+                    }
+                    match self.skip("*)") {
+                        Ok(true) => depth -= 1,
+                        Ok(false) => {},
+                        Err(err) => return Err(err),
+                    }
+                }
+                Ok(true)
+            }
+            res => res,
+        }
+    }
+
     pub fn next_token(&mut self) -> Result<(Pos, Pos, TokenType), Error> {
         let start = self.pos;
         match self.state {
@@ -264,13 +303,15 @@ impl<'a> Lexer<'a> {
                     Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
                     Err(err) => Err(err),
                 }
-                "\\" => match self.skip("\\*") {
-                    Ok(true) => match self.skip_until("\n") {
-                        Ok(_) | Err(Error::EndOfString) =>
-                            Ok((start, self.pos, TokenType::CommentLine)),
-                        Err(err) => Err(err),
-                    }
+                "\\" => match self.line_comment() {
+                    Ok(true) => Ok((start, self.pos, TokenType::Comment)),
                     Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
+                    Err(err) => Err(err),
+                }
+                // "*" => match self.skip("*)") => Unpaired comment closing
+                "(" => match self.block_comment() {
+                    Ok(true) => Ok((start, self.pos, TokenType::Comment)),
+                    Ok(false) => Ok((start, self.pos, TokenType::ParenOpen)),
                     Err(err) => Err(err),
                 }
                 _ => match self.ident() {
@@ -367,8 +408,21 @@ mod tests {
     fn line_comment() -> Result<(), Error> {
         let mut lx = Lexer::new("---- \\* hello world");
         assert_eq!(lx.next_token()?.2, TokenType::Separator);
-        assert_eq!(lx.next_token()?.2, TokenType::CommentLine);
+        assert_eq!(lx.next_token()?.2, TokenType::Comment);
         assert_eq!(lx.next_token(), Err(Error::EndOfString));
+        Ok(())
+    }
+
+    #[test]
+    fn block_comment() -> Result<(), Error> {
+        let mut lx = Lexer::new("---- (* hello (*worl*)d*)");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        assert_eq!(lx.next_token()?.2, TokenType::Comment);
+        assert_eq!(lx.next_token(), Err(Error::EndOfString));
+
+        let mut lx = Lexer::new("---- (* hello (*world*)");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        assert_eq!(lx.next_token(), Err(Error::UnclosedBlockComment));
         Ok(())
     }
 }
