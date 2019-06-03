@@ -1,3 +1,5 @@
+#![feature(is_sorted)]
+
 use wee_alloc::WeeAlloc;
 
 #[global_allocator]

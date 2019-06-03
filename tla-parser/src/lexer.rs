@@ -19,13 +19,140 @@ pub enum TokenType {
     Keyword(Keyword),
     ParenOpen,
     ParenClose,
+    PrefixOperator,
+    InfixOperator,
+    PostfixOperator,
     Unknown,
 }
 
-static KEYWORDS: &'static [(&'static str, TokenType)] = &[
+// This table must be sorted.
+// Dont forget LANG=C if you use unix sort.
+pub static KEYWORDS: &'static [(&'static str, TokenType)] = &[
+    ("DOMAIN", TokenType::PrefixOperator),
+    ("ENABLED", TokenType::PrefixOperator),
     ("EXTENDS", TokenType::Keyword(Keyword::Extends)),
     ("MODULE", TokenType::Keyword(Keyword::Module)),
+    ("SUBSET", TokenType::PrefixOperator),
+    ("UNCHANGED", TokenType::PrefixOperator),
+    ("UNION", TokenType::PrefixOperator),
     ("_", TokenType::Wildcard),
+];
+
+// This table must be sorted.
+// Dont forget LANG=C if you use unix sort.
+pub static OPERATORS: &'static [(&'static str, TokenType)] = &[
+    ("!!", TokenType::InfixOperator),
+    ("#", TokenType::InfixOperator),
+    ("##", TokenType::InfixOperator),
+    ("$", TokenType::InfixOperator),
+    ("$$", TokenType::InfixOperator),
+    ("%", TokenType::InfixOperator),
+    ("%%", TokenType::InfixOperator),
+    ("&", TokenType::InfixOperator),
+    ("&&", TokenType::InfixOperator),
+    ("'", TokenType::PostfixOperator),
+    ("(+)", TokenType::InfixOperator),
+    ("(-)", TokenType::InfixOperator),
+    ("(.)", TokenType::InfixOperator),
+    ("(/)", TokenType::InfixOperator),
+    ("(\\X)", TokenType::InfixOperator),
+    ("*", TokenType::InfixOperator),
+    ("**", TokenType::InfixOperator),
+    ("+", TokenType::InfixOperator),
+    ("++", TokenType::InfixOperator),
+    ("-", TokenType::InfixOperator),
+    ("-+->", TokenType::InfixOperator),
+    ("--", TokenType::InfixOperator),
+    ("-.", TokenType::PrefixOperator),
+    ("-|", TokenType::InfixOperator),
+    ("..", TokenType::InfixOperator),
+    ("...", TokenType::InfixOperator),
+    ("/", TokenType::InfixOperator),
+    ("//", TokenType::InfixOperator),
+    ("/=", TokenType::InfixOperator),
+    ("/\\", TokenType::InfixOperator),
+    ("::=", TokenType::InfixOperator),
+    (":=", TokenType::InfixOperator),
+    (":>", TokenType::InfixOperator),
+    ("<", TokenType::InfixOperator),
+    ("<:", TokenType::InfixOperator),
+    ("<=", TokenType::InfixOperator),
+    ("<=>", TokenType::InfixOperator),
+    ("<>", TokenType::PrefixOperator),
+    ("=", TokenType::InfixOperator),
+    ("=<", TokenType::InfixOperator),
+    ("=>", TokenType::InfixOperator),
+    ("=|", TokenType::InfixOperator),
+    (">", TokenType::InfixOperator),
+    (">=", TokenType::InfixOperator),
+    ("??", TokenType::InfixOperator),
+    ("@@", TokenType::InfixOperator),
+    ("[]", TokenType::PrefixOperator),
+    ("\\", TokenType::InfixOperator),
+    ("\\/", TokenType::InfixOperator),
+    ("\\X", TokenType::InfixOperator),
+    ("\\approx", TokenType::InfixOperator),
+    ("\\asymp", TokenType::InfixOperator),
+    ("\\bigcirc", TokenType::InfixOperator),
+    ("\\bullet", TokenType::InfixOperator),
+    ("\\cap", TokenType::InfixOperator),
+    ("\\cdot", TokenType::InfixOperator),
+    ("\\circ", TokenType::InfixOperator),
+    ("\\cong", TokenType::InfixOperator),
+    ("\\cup", TokenType::InfixOperator),
+    ("\\div", TokenType::InfixOperator),
+    ("\\doteq", TokenType::InfixOperator),
+    ("\\equiv", TokenType::InfixOperator),
+    ("\\geq", TokenType::InfixOperator),
+    ("\\gg", TokenType::InfixOperator),
+    ("\\in", TokenType::InfixOperator),
+    ("\\intersect", TokenType::InfixOperator),
+    ("\\land", TokenType::InfixOperator),
+    ("\\leq", TokenType::InfixOperator),
+    ("\\ll", TokenType::InfixOperator),
+    ("\\lnot", TokenType::PrefixOperator),
+    ("\\lor", TokenType::InfixOperator),
+    ("\\neg", TokenType::PrefixOperator),
+    ("\\notin", TokenType::InfixOperator),
+    ("\\o", TokenType::InfixOperator),
+    ("\\odot", TokenType::InfixOperator),
+    ("\\ominus", TokenType::InfixOperator),
+    ("\\oplus", TokenType::InfixOperator),
+    ("\\oslash", TokenType::InfixOperator),
+    ("\\otimes", TokenType::InfixOperator),
+    ("\\prec", TokenType::InfixOperator),
+    ("\\preceq", TokenType::InfixOperator),
+    ("\\propto", TokenType::InfixOperator),
+    ("\\sim", TokenType::InfixOperator),
+    ("\\simeq", TokenType::InfixOperator),
+    ("\\sqcap", TokenType::InfixOperator),
+    ("\\sqcup", TokenType::InfixOperator),
+    ("\\sqsubset", TokenType::InfixOperator),
+    ("\\sqsubseteq", TokenType::InfixOperator),
+    ("\\sqsupset", TokenType::InfixOperator),
+    ("\\sqsupseteq", TokenType::InfixOperator),
+    ("\\star", TokenType::InfixOperator),
+    ("\\subset", TokenType::InfixOperator),
+    ("\\subseteq", TokenType::InfixOperator),
+    ("\\succ", TokenType::InfixOperator),
+    ("\\succeq", TokenType::InfixOperator),
+    ("\\supset", TokenType::InfixOperator),
+    ("\\supseteq", TokenType::InfixOperator),
+    ("\\times", TokenType::InfixOperator),
+    ("\\union", TokenType::InfixOperator),
+    ("\\uplus", TokenType::InfixOperator),
+    ("\\wr", TokenType::InfixOperator),
+    ("^", TokenType::InfixOperator),
+    ("^#", TokenType::PostfixOperator),
+    ("^*", TokenType::PostfixOperator),
+    ("^+", TokenType::PostfixOperator),
+    ("^^", TokenType::InfixOperator),
+    ("|", TokenType::InfixOperator),
+    ("|-", TokenType::InfixOperator),
+    ("|=", TokenType::InfixOperator),
+    ("||", TokenType::InfixOperator),
+    ("~", TokenType::PrefixOperator),
+    ("~>", TokenType::InfixOperator),
 ];
 
 /// Specifies a position in a string.
@@ -281,6 +408,33 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub fn operator(&mut self) -> Result<Option<TokenType>, Error> {
+        let start = self.pos;
+        let mut prev_pos = self.pos;
+        let mut op = self.current_char();
+        let mut res = None;
+        loop {
+            match OPERATORS.binary_search_by_key(&op, |t| t.0) {
+                Ok(i) => {
+                    res = Some(OPERATORS[i].1);
+                    prev_pos = self.pos;
+                    match self.next_char() {
+                        Ok(true) => {
+                            op = self.substring(&start, &self.pos);
+                        }
+                        Ok(false) => return Ok(res),
+                        Err(err) => return Err(err),
+                    }
+                }
+                _ => {
+                    // continue if is prefix
+                    self.pos = prev_pos;
+                    return Ok(res);
+                }
+            }
+        }
+    }
+
     pub fn next_token(&mut self) -> Result<(Pos, Pos, TokenType), Error> {
         let start = self.pos;
         match self.state {
@@ -304,18 +458,26 @@ impl<'a> Lexer<'a> {
                     Ok(true) => self
                         .skip_many("-")
                         .map(|_| (start, self.pos, TokenType::Separator)),
-                    Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
+                    Ok(false) => match self.operator() {
+                        Ok(Some(op)) => Ok((start, self.pos, op)),
+                        Ok(None) => Err(Error::NotRecognized),
+                        Err(err) => Err(err),
+                    }
                     Err(err) => Err(err),
                 }
                 "\\" => match self.line_comment() {
                     Ok(true) => Ok((start, self.pos, TokenType::Comment)),
-                    Ok(false) => Err(Error::NotRecognized), // FIXME: various operators
                     Err(err) => Err(err),
+                    Ok(false) => match self.operator() {
+                        Ok(Some(op)) => Ok((start, self.pos, op)),
+                        Ok(None) => Err(Error::NotRecognized),
+                        Err(err) => Err(err),
+                    }
                 }
                 // "*" => match self.skip("*)") => Unpaired comment closing
                 "(" => match self.block_comment() {
                     Ok(true) => Ok((start, self.pos, TokenType::Comment)),
-                    Ok(false) => Ok((start, self.pos, TokenType::ParenOpen)),
+                    Ok(false) => Ok((start, self.pos, TokenType::ParenOpen)), // Move this to ops
                     Err(err) => Err(err),
                 }
                 _ => match self.ident() {
@@ -337,7 +499,13 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Error, TokenType};
+    use super::*;
+
+    #[test]
+    fn tables_are_sorted() {
+        assert!(KEYWORDS.is_sorted_by_key(|t| t.0));
+        assert!(OPERATORS.is_sorted_by_key(|t| t.0));
+    }
 
     #[test]
     fn next_char() {
@@ -428,6 +596,25 @@ mod tests {
         let mut lx = Lexer::new("---- (* hello (*world*)");
         assert_eq!(lx.next_token()?.2, TokenType::Separator);
         assert_eq!(lx.next_token(), Err(Error::UnclosedBlockComment));
+        Ok(())
+    }
+
+    #[test]
+    fn operator() -> Result<(), Error> {
+        let mut lx = Lexer::new("---- \\/");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        let (start, end, token) = lx.next_token()?;
+        assert_eq!(token, TokenType::InfixOperator);
+        assert_eq!(lx.substring(&start, &end), "\\/");
+
+        let mut lx = Lexer::new("---- ---+->");
+        assert_eq!(lx.next_token()?.2, TokenType::Separator);
+        let (start, end, token) = lx.next_token()?;
+        assert_eq!(token, TokenType::InfixOperator);
+        assert_eq!(lx.substring(&start, &end), "--");
+        let (start, end, token) = lx.next_token()?;
+        assert_eq!(token, TokenType::InfixOperator);
+        assert_eq!(lx.substring(&start, &end), "-+->");
         Ok(())
     }
 }
