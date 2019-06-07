@@ -1,0 +1,2 @@
+[workspace]
+members = ["tla-parser", "tla-web"]

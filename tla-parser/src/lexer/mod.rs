@@ -4,15 +4,27 @@ mod base;
 mod combinators;
 mod token_type;
 
-use base::{Pos, Lexer, Error};
-use combinators::TlaCombinators;
-use token_type::{TokenType, KEYWORDS};
+pub use base::{Pos, Lexer, Error};
+pub use combinators::TlaCombinators;
+pub use token_type::{TokenType, KEYWORDS};
+
+
+pub struct Lexeme {
+    start: Pos,
+    end: Pos,
+    value: Result<TokenType, Error>,
+}
+
+
+pub fn lex(code: &str) -> Vec<Lexeme> {
+    vec![]
+}
 
 
 pub fn next_token(mut lx: &mut Lexer) -> Result<(Pos, Pos, TokenType), Error> {
     let start = lx.pos;
     match lx.current_char() {
-        "" => Err(Error::EndOfString),
+        "" => Err(Error::EndOfString), // FIXME: get error from next_char
         " " | "\t" => lx.skip_whitespace()
             .and_then(|_| next_token(&mut lx)),
         "\n" | "\r\n" => lx.next_char().and_then(|_| {

@@ -9,7 +9,7 @@ Building
 --------
 
 ```
-cd tla-parser ; wasm-pack build --target web ; cd -
+cd tla-web ; wasm-pack build --target web ; cd -
 cd ui ; preact build -no-prerender - ; cd -
 ```
 

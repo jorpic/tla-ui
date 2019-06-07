@@ -37,6 +37,6 @@
     "bulma": "^0.7.4",
     "codemirror": "^5.46.0",
     "preact": "^8.4.2",
-    "tla-parser": "file:../tla-parser/pkg"
+    "tla-parser": "file:../tla-web/pkg"
   }
 }
