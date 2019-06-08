@@ -19,7 +19,6 @@ pub struct Lexer<'a> {
     pub str: &'a str,
     grc: GraphemeCursor,
     pub pos: Pos,
-    snapshots: Vec<Pos>,
 }
 
 
@@ -36,7 +35,6 @@ impl<'a> Lexer<'a> {
                 char_size: 0,
             },
             grc: GraphemeCursor::new(0, s.len(), true),
-            snapshots: Vec::new(),
         };
         let _ = lex.next_char();
         lex
@@ -90,20 +88,6 @@ impl<'a> Lexer<'a> {
             _ => self.pos.col += 1,
         }
         res
-    }
-
-    pub fn save_snapshot(&mut self) {
-        self.snapshots.push(self.pos);
-    }
-
-    pub fn restore_snapshot(&mut self) {
-        debug_assert!(!self.snapshots.is_empty());
-        self.pos = self.snapshots.pop().expect("no snapshot to restore");
-    }
-
-    pub fn drop_snapshot(&mut self) {
-        debug_assert!(!self.snapshots.is_empty());
-        self.snapshots.pop();
     }
 }
 

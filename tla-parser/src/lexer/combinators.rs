@@ -53,14 +53,14 @@ impl TlaCombinators for Lexer<'_> {
     // NB. Does not support complex graphemes in `s`.
     fn skip(&mut self, s: &str) -> Result<bool, Error> {
         let mut premature_end_of_string = false;
-        self.save_snapshot();
+        let save_pos = self.pos;
         for c in s.chars() {
             if premature_end_of_string {
-                self.restore_snapshot();
+                self.pos = save_pos;
                 return Ok(false);
             }
             if self.current_char() != c.to_string() {
-                self.restore_snapshot();
+                self.pos = save_pos;
                 return Ok(false);
             }
             match self.next_char() {
@@ -71,7 +71,6 @@ impl TlaCombinators for Lexer<'_> {
                 Err(err) => return Err(Error::Unicode(err)),
             }
         }
-        self.drop_snapshot();
         Ok(true)
     }
 
@@ -86,14 +85,14 @@ impl TlaCombinators for Lexer<'_> {
     }
 
     fn ident(&mut self) -> Result<bool, Error> {
-        self.save_snapshot();
+        let save_pos = self.pos;
         // FIXME: TLA+ actually allows identifiers starting with a digit.
         if !self
             .current_char()
             .chars()
             .all(|c| c.is_ascii_alphabetic() || c == '_')
         {
-            self.restore_snapshot();
+            self.pos = save_pos;
             return Ok(false);
         }
         loop {
@@ -105,7 +104,6 @@ impl TlaCombinators for Lexer<'_> {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_');
             if !valid_char {
-                self.drop_snapshot();
                 return Ok(true);
             }
         }
