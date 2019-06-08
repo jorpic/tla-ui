@@ -23,15 +23,6 @@ pub struct Lexer<'a> {
 }
 
 
-#[derive(Debug, PartialEq)]
-pub enum Error {
-    EndOfString,
-    MalformedGrapheme(GraphemeIncomplete),
-    UnclosedBlockComment,
-    UnpairedCommentClosing,
-    NotRecognized,
-}
-
 impl<'a> Lexer<'a> {
     pub fn new(s: &'a str) -> Self {
         let mut lex = Lexer {
@@ -63,7 +54,7 @@ impl<'a> Lexer<'a> {
         &self.str[start.byte_offset..end.byte_offset]
     }
 
-    pub fn next_char(&mut self) -> Result<bool, Error> {
+    pub fn next_char(&mut self) -> Result<bool, GraphemeIncomplete> {
         // Next character starts immediately after the current one.
         self.pos.byte_offset = self.pos.byte_offset + self.pos.char_size;
         self.grc.set_cursor(self.pos.byte_offset);
@@ -83,7 +74,7 @@ impl<'a> Lexer<'a> {
             }
             Err(err) => {
                 self.pos.char_size = 0;
-                Err(Error::MalformedGrapheme(err))
+                Err(err)
             }
         };
         // Returns "" before the start, at the end of string, at the error.

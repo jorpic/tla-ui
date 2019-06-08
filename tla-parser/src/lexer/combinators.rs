@@ -1,6 +1,13 @@
 
-use super::base::{Lexer, Error};
+use super::base::Lexer;
 use super::token_type::{TokenType, OPERATORS};
+
+
+#[derive(Debug, PartialEq)]
+pub enum Error {
+    Unicode(unicode_segmentation::GraphemeIncomplete),
+    UnclosedBlockComment,
+}
 
 
 pub trait TlaCombinators {
@@ -21,9 +28,9 @@ impl TlaCombinators for Lexer<'_> {
             if c != " " && c != "\t" {
                 break;
             }
-            let next = self.next_char();
-            if next != Ok(true) {
-                return next;
+            let res = self.next_char();
+            if res != Ok(true) {
+                return res.map_err(Error::Unicode);
             }
         }
         Ok(true)
@@ -38,7 +45,7 @@ impl TlaCombinators for Lexer<'_> {
             }
             match self.next_char() {
                 Ok(true) => {},
-                err => return err,
+                res => return res.map_err(Error::Unicode),
             }
         }
     }
@@ -61,7 +68,7 @@ impl TlaCombinators for Lexer<'_> {
                 Ok(false) => {
                     premature_end_of_string = true;
                 }
-                err => return err, // only MalformedGrapheme is possible here
+                Err(err) => return Err(Error::Unicode(err)),
             }
         }
         self.drop_snapshot();
@@ -91,7 +98,7 @@ impl TlaCombinators for Lexer<'_> {
         }
         loop {
             if let Err(err) = self.next_char() {
-                return Err(err);
+                return Err(Error::Unicode(err));
             }
             let valid_char = self
                 .current_char()
@@ -119,7 +126,7 @@ impl TlaCombinators for Lexer<'_> {
                     match self.next_char() {
                         Ok(true) => {},
                         Ok(false) => return Err(Error::UnclosedBlockComment),
-                        Err(err) => return Err(err),
+                        Err(err) => return Err(Error::Unicode(err)),
                     }
                     match self.skip("(*") {
                         Ok(true) => depth += 1,
@@ -153,7 +160,7 @@ impl TlaCombinators for Lexer<'_> {
                             op = self.substring(&start, &self.pos);
                         }
                         Ok(false) => return Ok(res),
-                        Err(err) => return Err(err),
+                        Err(err) => return Err(Error::Unicode(err)),
                     }
                 }
                 _ => {
