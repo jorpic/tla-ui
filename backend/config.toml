@@ -1,0 +1,7 @@
+server_port = 8888
+allow_origin = "https://localhost.me"
+
+sany_cmd = ["java",
+            "-cp",
+            "/home/user/t/tlaplus/tlatools/dist/tla2tools.jar",
+            "tla2sany.SANY"]

@@ -1,2 +1,2 @@
 [workspace]
-members = ["tla-parser", "tla-web"]
+members = ["tla-parser", "tla-web", "backend"]
