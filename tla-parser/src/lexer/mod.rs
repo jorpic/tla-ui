@@ -24,7 +24,7 @@ pub struct Lexeme {
 
 
 pub fn lex(code: &str) -> Vec<Lexeme> {
-    vec![]
+    vec![] // FIXME: not implemented
 }
 
 
@@ -84,3 +84,11 @@ pub fn next_token(mut lx: &mut Lexer) -> Result<(Pos, Pos, TokenType), Error> {
         }
     }
 }
+
+// FIXME: tests
+// - next_token after EOF
+// - next_token after error should be able to skip error
+// - lex: list of tokens
+//      - is this even useful? lexer must be lazy and streaming
+//      - may be helpful just for tests
+// - lex with errors inside

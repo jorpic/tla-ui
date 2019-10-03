@@ -11,6 +11,7 @@ pub enum Error {
 
 
 pub trait TlaCombinators {
+    // FIXME: add short descriptions
     fn skip_whitespace(&mut self) -> Result<bool, Error>;
     fn skip_until(&mut self, s: &str) -> Result<bool, Error>;
     fn skip(&mut self, s: &str) -> Result<bool, Error>;

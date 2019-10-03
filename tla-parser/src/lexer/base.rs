@@ -21,7 +21,9 @@ pub struct Lexer<'a> {
     pub pos: Pos,
 }
 
-
+/// This is a basic Unicode-aware grapheme stream.
+/// It is able to return current grapheme.
+/// It is able to advance pointer forward by one grapheme.
 impl<'a> Lexer<'a> {
     pub fn new(s: &'a str) -> Self {
         let mut lex = Lexer {
@@ -48,10 +50,13 @@ impl<'a> Lexer<'a> {
         &self.str[self.pos.byte_offset..self.pos.byte_offset + self.pos.char_size]
     }
 
+    /// Extracts part of the underlying string.
     pub fn substring(&self, start: &Pos, end: &Pos) -> &str {
         &self.str[start.byte_offset..end.byte_offset]
     }
 
+    /// Advances cursor forward.
+    /// Returns false if EOF, returns error if next grapheme is malformed.
     pub fn next_char(&mut self) -> Result<bool, GraphemeIncomplete> {
         // Next character starts immediately after the current one.
         self.pos.byte_offset = self.pos.byte_offset + self.pos.char_size;
@@ -98,6 +103,13 @@ mod tests {
 
     #[test]
     fn next_char() {
+        // Empty string returns Ok(false)
+        // Empty string current_char is ""
+        // Malformed char returns error
+        // next_char at EOF is idempotent
+        // next_char at malformed grapheme is idempotent
+        // next_char at simple char
+        // mext_char at grapheme
         let mut lx = Lexer::new("");
         assert_eq!(lx.current_char(), "");
         assert_eq!(lx.next_char(), Ok(false));
