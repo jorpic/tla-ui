@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "bulma": "^0.7.4",
-    "codemirror": "^5.46.0",
+    "codemirror": "^5.58.2",
     "preact": "^8.4.2",
     "tla-parser": "file:../tla-web/pkg"
   }
